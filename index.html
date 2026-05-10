@@ -305,8 +305,61 @@
     }
     .col .col-filter::placeholder { color: var(--ink-2); }
 
+    /* ─────────── scroll window ─────────── */
+    .entries {
+      counter-reset: entry;
+      max-height: 560px;
+      overflow-y: auto;
+      /* subtle inset so the scroll region reads as a "window" */
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      /* soft mask: fade top/bottom edges when content overflows */
+      --fade: 24px;
+      -webkit-mask-image:
+        linear-gradient(to bottom,
+          transparent 0,
+          #000 var(--fade),
+          #000 calc(100% - var(--fade)),
+          transparent 100%);
+              mask-image:
+        linear-gradient(to bottom,
+          transparent 0,
+          #000 var(--fade),
+          #000 calc(100% - var(--fade)),
+          transparent 100%);
+      scroll-behavior: smooth;
+      scrollbar-width: thin;
+      scrollbar-color: var(--rule) transparent;
+    }
+    .entries::-webkit-scrollbar { width: 8px; }
+    .entries::-webkit-scrollbar-track { background: transparent; }
+    .entries::-webkit-scrollbar-thumb {
+      background: var(--rule);
+      border-radius: 4px;
+    }
+    .entries::-webkit-scrollbar-thumb:hover { background: var(--ink-2); }
+
+    @media (max-width: 720px) {
+      .entries { max-height: 440px; }
+    }
+
+    /* scroll indicator: thin line under the list showing read progress */
+    .col-progress {
+      height: 2px;
+      background: var(--rule);
+      margin-top: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+    .col-progress::after {
+      content: ""; position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: var(--p, 0%);
+      background: var(--accent);
+      transition: width .15s ease-out;
+    }
+
     /* ─────────── list (newspaper entry) ─────────── */
-    .entries { counter-reset: entry; }
     .entry {
       counter-increment: entry;
       padding: 14px 0 16px;
@@ -314,6 +367,8 @@
       position: relative;
       padding-left: 34px;
     }
+    .entry:first-child { padding-top: 18px; }
+    .entry:last-child  { border-bottom: none; padding-bottom: 20px; }
     .entry::before {
       content: counter(entry, decimal-leading-zero) ".";
       position: absolute; left: 0; top: 15px;
@@ -321,6 +376,7 @@
       color: var(--accent); font-weight: 500;
       letter-spacing: 0.02em;
     }
+    .entry:first-child::before { top: 19px; }
     .entry-title {
       font-family: var(--serif); font-size: 16px; font-weight: 500;
       line-height: 1.45; color: var(--ink);
@@ -550,7 +606,7 @@
     <div class="hint">
       <span class="label" data-zh="试试 →" data-en="Try →">试试 →</span>
       <span class="example" onclick="fillAndSearch('2510.18936')">2510.18936</span>
-      <span class="example" onclick="fillAndSearch('10.1145/3726302.3730046')">10.1145/3726302.3730046</span>
+      <span class="example" onclick="fillAndSearch('10.3866/PKU.WHXB201112303')">10.3866/PKU.WHXB201112303</span>
       <span class="example" onclick="fillAndSearch('Attention is all you need')">Attention is all you need</span>
     </div>
 
@@ -586,6 +642,7 @@
           data-en-placeholder="filter by title or author"
           placeholder="过滤 · 标题或作者" />
         <div class="entries" id="refList"></div>
+        <div class="col-progress" id="refProgress"></div>
       </section>
       <section class="col">
         <h3>
@@ -597,6 +654,7 @@
           data-en-placeholder="filter by title or author"
           placeholder="过滤 · 标题或作者" />
         <div class="entries" id="citList"></div>
+        <div class="col-progress" id="citProgress"></div>
       </section>
     </div>
 
@@ -645,7 +703,7 @@
         <p style="margin-left: 22px; margin-top: 4px;">
           <code>2510.18936</code> &nbsp;·&nbsp;
           <code>arxiv.org/abs/2510.18936</code> &nbsp;·&nbsp;
-          <code>10.1145/3726302.3730046</code> &nbsp;·&nbsp;
+          <code>10.3866/PKU.WHXB201112303</code> &nbsp;·&nbsp;
           <span data-zh="或者直接输入论文标题。" data-en="or just the paper title.">或者直接输入论文标题。</span>
         </p>
       </section>

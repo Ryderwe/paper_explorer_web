@@ -81,7 +81,7 @@ key 只存在你本地浏览器的 `localStorage`，不会上传到任何服务�
 | `2506.06341v2` | 带版本号也行 |
 | `https://arxiv.org/abs/1706.03762` | arXiv URL |
 | `cs.CL/0105020` | arXiv 旧格式 |
-| `10.1145/3726302.3730046` | DOI |
+| `10.3866/PKU.WHXB201112303` | DOI |
 | `0216a58074f5e8cf6ae055f6fb3189dd6740229a` | Semantic Scholar 40 位 paperId |
 | `Attention is all you need` | 纯标题（先用 arXiv 精确匹配，失败再走 S2 搜索） |
 

@@ -146,7 +146,7 @@ function classify(raw) {
   const q = (raw || "").trim();
   if (!q) throw new Error(lang === "zh" ? "请输入论文信息" : "Please enter a paper identifier");
 
-  // DOI first (avoids false arXiv match on e.g. 10.1145/3726302.3730046)
+  // DOI first (avoids false arXiv match on e.g. 10.3866/PKU.WHXB201112303)
   const doi = q.match(/10\.\d{4,9}\/[^\s"'<>]+/);
   if (doi) {
     const d = doi[0].replace(/[.,);\]]+$/, "");
@@ -335,6 +335,7 @@ function renderSummary(p) {
 function renderList(container, items, kind) {
   if (!items.length) {
     container.innerHTML = `<div class="empty">${kind === "ref" ? t("emptyRef") : t("emptyCit")}</div>`;
+    updateProgress(container);
     return;
   }
   container.innerHTML = items.map((p) => {
@@ -351,7 +352,41 @@ function renderList(container, items, kind) {
         <div class="entry-links">${linkHtml}</div>
       </div>`;
   }).join("");
+  // reset scroll each time list is re-rendered (filter / new search)
+  container.scrollTop = 0;
+  updateProgress(container);
 }
+
+// ── Scroll progress indicator ──────────────────────────────────────────────
+function progressBarFor(container) {
+  if (container === refListEl) return $("refProgress");
+  if (container === citListEl) return $("citProgress");
+  return null;
+}
+
+function updateProgress(container) {
+  const bar = progressBarFor(container);
+  if (!bar) return;
+  const maxScroll = container.scrollHeight - container.clientHeight;
+  const pct = maxScroll > 4
+    ? Math.min(100, (container.scrollTop / maxScroll) * 100)
+    : 100;  // list fits entirely — show full bar
+  bar.style.setProperty("--p", pct.toFixed(1) + "%");
+}
+
+function attachScrollProgress(container) {
+  let ticking = false;
+  container.addEventListener("scroll", () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      updateProgress(container);
+      ticking = false;
+    });
+  }, { passive: true });
+}
+attachScrollProgress(refListEl);
+attachScrollProgress(citListEl);
 
 function applyFilter(inputId, listId, items, kind) {
   const q = $(inputId).value.trim().toLowerCase();
