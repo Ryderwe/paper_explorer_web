@@ -1,4 +1,4 @@
-# Paper Explorer — 纯静态版
+# Paper Explorer
 
 零后端、零构建。把整个 `paper_explorer_web/` 目录扔到 Vercel / Cloudflare
 Pages / Netlify / GitHub Pages 都能跑。
@@ -90,10 +90,6 @@ key 只存在你本地浏览器的 `localStorage`，不会上传到任何服务�
 **Q: 为什么不需要后端？**
 Semantic Scholar 的 `api.semanticscholar.org` 显式返回
 `Access-Control-Allow-Origin: *`，浏览器可以直接跨域调用。
-
-**Q: 那原来的 FastAPI 版本呢？**
-仍然保留在 `paper_explorer/`，做本地开发/离线使用更友好（有内存缓存、错误
-提示更细）。要部署到公网就用这个纯静态版。
 
 **Q: 会被 S2 限流吗？**
 匿名调用会。解决办法：
