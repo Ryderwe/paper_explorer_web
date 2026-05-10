@@ -107,3 +107,5 @@ Semantic Scholar 的 `api.semanticscholar.org` 显式返回
 **Q: 数据没了怎么办？**
 所有数据来自 Semantic Scholar Graph API 的实时响应，本应用不存储任何数据。
 刷新页面即重置。
+
+致谢：https://linux.do 
