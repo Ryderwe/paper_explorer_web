@@ -3,12 +3,678 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Paper Explorer</title>
-  <meta name="description" content="Explore a paper's references and citations. Zero-backend, powered by Semantic Scholar." />
+  <title>Paper Explorer · by 乐乐观</title>
+  <meta name="description" content="A small tool to trace a paper's references and citations. Zero backend." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ─────────── tokens ─────────── */
+    :root {
+      --bg:     #f4efe6;   /* 旧纸色 */
+      --ink:    #1a1814;   /* 接近黑的深棕 */
+      --ink-2:  #6b6358;   /* 次级灰棕 */
+      --rule:   #c9bfae;   /* 分隔线 */
+      --accent: #a83f2b;   /* 烧砖红，印刷风 */
+      --accent-2:#f6e3d8;  /* 浅色强调底 */
+      --ok:     #1f6b3f;   /* 墨绿 */
+      --err:    #a33030;
+      --serif:  'Fraunces', 'Noto Serif SC', 'Songti SC', Georgia, serif;
+      --sans:   'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+      --mono:   'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+    [data-theme="dark"] {
+      --bg:     #14120f;
+      --ink:    #ece7de;
+      --ink-2:  #8a8274;
+      --rule:   #3a342b;
+      --accent: #e06a52;
+      --accent-2:#2c1c17;
+      --ok:     #6fc28f;
+      --err:    #e88282;
+    }
+
+    /* ─────────── base ─────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 17px; }
+    body {
+      font-family: var(--serif);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* Very subtle paper grain using radial-gradient noise */
+    body::before {
+      content: ""; position: fixed; inset: 0; pointer-events: none;
+      background-image:
+        radial-gradient(circle at 20% 30%, rgba(0,0,0,.018) 0, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(0,0,0,.018) 0, transparent 40%);
+      z-index: 0;
+    }
+    [data-theme="dark"] body::before { display: none; }
+
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; background: none; border: none; color: inherit; cursor: pointer; }
+    input { font-family: inherit; background: none; border: none; color: inherit; outline: none; }
+
+    ::selection { background: var(--accent); color: var(--bg); }
+
+    /* ─────────── layout ─────────── */
+    .wrap {
+      position: relative; z-index: 1;
+      max-width: 960px; margin: 0 auto;
+      padding: 36px 40px 80px;
+    }
+    @media (max-width: 640px) {
+      html { font-size: 16px; }
+      .wrap { padding: 22px 18px 60px; }
+    }
+
+    /* ─────────── masthead ─────────── */
+    .masthead {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 16px; padding-bottom: 10px;
+      border-bottom: 1px double var(--ink);
+    }
+    .masthead-left {
+      display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    }
+    .logo {
+      font-family: var(--serif); font-weight: 700;
+      font-size: clamp(28px, 5vw, 42px);
+      letter-spacing: -0.02em; line-height: 1;
+      font-style: italic;
+    }
+    .logo em { font-style: normal; color: var(--accent); }
+    .tagline {
+      font-family: var(--sans); font-size: 11px; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.18em;
+      color: var(--ink-2); white-space: nowrap;
+    }
+    .toolbar {
+      display: flex; gap: 4px; align-items: center;
+      font-family: var(--sans);
+    }
+    .toolbar button {
+      font-size: 12px; letter-spacing: .02em;
+      padding: 6px 10px; border-radius: 2px;
+      color: var(--ink-2);
+      transition: color .15s, background .15s;
+    }
+    .toolbar button:hover { color: var(--ink); background: var(--accent-2); }
+    .toolbar .sep { color: var(--rule); padding: 0 2px; user-select: none; }
+
+    /* issue line: 保持旧报头的感觉 */
+    .issue-line {
+      display: flex; justify-content: space-between;
+      font-family: var(--sans);
+      font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--ink-2);
+      padding: 6px 0 18px;
+      border-bottom: 1px solid var(--rule);
+      margin-bottom: 24px;
+    }
+
+    /* ─────────── search ─────────── */
+    .search {
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 2px solid var(--ink);
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+    }
+    .search-prefix {
+      font-family: var(--sans); font-weight: 600; font-size: 12px;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); white-space: nowrap;
+    }
+    .search input {
+      flex: 1; min-width: 0;
+      font-family: var(--serif);
+      font-size: clamp(20px, 3vw, 28px);
+      padding: 6px 0;
+      font-weight: 400;
+    }
+    .search input::placeholder { color: var(--ink-2); font-style: italic; opacity: .7; }
+    .search button {
+      font-family: var(--sans); font-size: 13px; font-weight: 600;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--bg); background: var(--accent);
+      padding: 10px 18px; border-radius: 2px;
+      transition: background .15s, transform .15s;
+      white-space: nowrap;
+    }
+    .search button:hover { background: var(--ink); }
+    .search button:active { transform: translateY(1px); }
+    .search button:disabled { opacity: .4; cursor: not-allowed; }
+
+    .hint {
+      font-family: var(--sans); font-size: 12px; color: var(--ink-2);
+      margin-bottom: 24px;
+      display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline;
+    }
+    .hint .label {
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em;
+      font-size: 11px;
+    }
+    .hint .example {
+      font-family: var(--mono); font-size: 12px;
+      color: var(--ink); cursor: pointer;
+      border-bottom: 1px dotted var(--ink-2);
+      transition: color .15s, border-color .15s;
+    }
+    .hint .example:hover { color: var(--accent); border-color: var(--accent); }
+
+    .apikey {
+      font-family: var(--sans); font-size: 11px; color: var(--ink-2);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 10px 0;
+      border-top: 1px dotted var(--rule);
+      margin-bottom: 28px;
+    }
+    .apikey label { text-transform: uppercase; letter-spacing: .1em; font-weight: 600; }
+    .apikey input {
+      font-family: var(--mono); font-size: 12px;
+      border-bottom: 1px solid var(--rule);
+      padding: 2px 4px;
+      width: 220px;
+    }
+    .apikey input:focus { border-color: var(--accent); }
+    .apikey button {
+      font-family: var(--sans); font-size: 11px; text-transform: uppercase;
+      letter-spacing: .1em; font-weight: 600;
+      padding: 4px 8px;
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      color: var(--ink-2);
+      transition: all .15s;
+    }
+    .apikey button:hover { color: var(--accent); border-color: var(--accent); }
+    .apikey a { color: var(--accent); border-bottom: 1px dotted var(--accent); }
+
+    /* ─────────── status ─────────── */
+    .status {
+      font-family: var(--sans); font-size: 13px;
+      padding: 10px 0 14px;
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      margin-bottom: 24px;
+      color: var(--ink-2);
+      font-style: italic;
+    }
+    .status.error { color: var(--err); font-style: normal; font-weight: 500; }
+
+    /* ─────────── paper head (the "article opener") ─────────── */
+    .paper {
+      margin: 32px 0;
+      padding-bottom: 28px;
+      border-bottom: 1px double var(--ink);
+    }
+    .paper-eyebrow {
+      font-family: var(--sans); font-size: 11px; font-weight: 600;
+      letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .paper h2 {
+      font-family: var(--serif); font-weight: 600;
+      font-size: clamp(24px, 4vw, 34px);
+      line-height: 1.2; letter-spacing: -0.015em;
+      margin-bottom: 10px;
+    }
+    .paper .byline {
+      font-family: var(--serif); font-style: italic;
+      font-size: 15px; color: var(--ink-2);
+      margin-bottom: 16px;
+    }
+    .paper .facts {
+      font-family: var(--sans); font-size: 12px; color: var(--ink-2);
+      display: flex; flex-wrap: wrap; gap: 6px 18px;
+      padding: 10px 0;
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      margin-bottom: 14px;
+    }
+    .paper .facts b {
+      font-weight: 600; color: var(--ink);
+      text-transform: uppercase; letter-spacing: 0.1em; font-size: 10.5px;
+      margin-right: 4px;
+    }
+    .paper .facts .fact-ok b { color: var(--ok); }
+    .paper .facts .fact-accent b { color: var(--accent); }
+
+    .paper .links {
+      font-family: var(--mono); font-size: 11.5px;
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 14px;
+    }
+    .paper .links a {
+      color: var(--ink);
+      padding: 5px 10px;
+      border: 1px solid var(--ink);
+      border-radius: 2px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .paper .links a:hover {
+      color: var(--bg); background: var(--ink);
+    }
+    .paper .links a::before { content: ""; }
+
+    .paper .abstract {
+      font-family: var(--serif); font-size: 15px;
+      line-height: 1.7; color: var(--ink);
+      padding: 14px 18px;
+      border-left: 3px solid var(--accent);
+      background: var(--accent-2);
+      max-height: 180px; overflow: auto;
+    }
+
+    /* ─────────── two-column (magazine style) ─────────── */
+    .cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 40px; row-gap: 32px;
+    }
+    @media (max-width: 720px) {
+      .cols { grid-template-columns: 1fr; column-gap: 0; }
+    }
+    .col h3 {
+      font-family: var(--serif); font-weight: 600; font-style: italic;
+      font-size: 22px; letter-spacing: -0.01em;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--ink);
+      display: flex; align-items: baseline; gap: 10px;
+    }
+    .col h3 .count {
+      font-family: var(--sans); font-style: normal;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--accent);
+    }
+    .col .col-filter {
+      font-family: var(--sans); font-size: 12px;
+      width: 100%;
+      padding: 8px 0;
+      border-bottom: 1px dotted var(--rule);
+      margin: 10px 0;
+    }
+    .col .col-filter::placeholder { color: var(--ink-2); }
+
+    /* ─────────── list (newspaper entry) ─────────── */
+    .entries { counter-reset: entry; }
+    .entry {
+      counter-increment: entry;
+      padding: 14px 0 16px;
+      border-bottom: 1px solid var(--rule);
+      position: relative;
+      padding-left: 34px;
+    }
+    .entry::before {
+      content: counter(entry, decimal-leading-zero) ".";
+      position: absolute; left: 0; top: 15px;
+      font-family: var(--mono); font-size: 11px;
+      color: var(--accent); font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+    .entry-title {
+      font-family: var(--serif); font-size: 16px; font-weight: 500;
+      line-height: 1.45; color: var(--ink);
+    }
+    .entry-title .year {
+      font-family: var(--sans); font-size: 12px; font-weight: 500;
+      color: var(--ink-2); margin-left: 4px;
+    }
+    .entry-meta {
+      font-family: var(--serif); font-style: italic;
+      font-size: 13px; color: var(--ink-2);
+      margin-top: 4px;
+    }
+    .entry-links {
+      font-family: var(--mono); font-size: 10.5px;
+      margin-top: 10px;
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .entry-links a {
+      color: var(--ink-2);
+      padding: 3px 8px;
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .entry-links a::before { content: ""; }  /* remove arrow */
+    .entry-links a:hover {
+      color: var(--bg); background: var(--accent); border-color: var(--accent);
+    }
+    .entry-links a.pdf {
+      color: var(--ok); border-color: var(--ok);
+    }
+    .entry-links a.pdf:hover {
+      color: var(--bg); background: var(--ok); border-color: var(--ok);
+    }
+
+    .empty {
+      padding: 32px 0; text-align: center;
+      font-family: var(--serif); font-style: italic;
+      color: var(--ink-2); font-size: 14px;
+    }
+
+    /* ─────────── colophon (footer) ─────────── */
+    .colophon {
+      margin-top: 56px;
+      padding-top: 20px;
+      border-top: 1px double var(--ink);
+      font-family: var(--sans); font-size: 11px;
+      letter-spacing: 0.08em; color: var(--ink-2);
+      text-align: center; line-height: 2;
+    }
+    .colophon em {
+      font-family: var(--serif); font-style: italic; font-weight: 500;
+      letter-spacing: 0; color: var(--ink);
+    }
+    .colophon a { color: var(--accent); border-bottom: 1px dotted var(--accent); }
+
+    /* ─────────── modal (intro dialog) ─────────── */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(20, 18, 15, .55);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      display: none;
+      align-items: center; justify-content: center;
+      padding: 20px;
+      animation: fadeIn .25s ease;
+    }
+    .modal-backdrop.show { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .modal {
+      position: relative;
+      max-width: 560px; width: 100%;
+      max-height: 92vh; overflow-y: auto;
+      background: var(--bg);
+      border: 1px solid var(--ink);
+      padding: 36px 36px 28px;
+      box-shadow:
+        6px 6px 0 var(--ink),
+        0 12px 30px rgba(0,0,0,.25);
+      animation: slideUp .3s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    [data-theme="dark"] .modal {
+      box-shadow:
+        6px 6px 0 var(--accent),
+        0 12px 30px rgba(0,0,0,.6);
+    }
+    @media (max-width: 520px) {
+      .modal { padding: 24px 22px 20px; }
+      .modal { box-shadow: 4px 4px 0 var(--ink); }
+    }
+
+    .modal-close {
+      position: absolute; top: 12px; right: 14px;
+      font-family: var(--mono); font-size: 18px;
+      color: var(--ink-2);
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 2px;
+      transition: color .15s, background .15s;
+    }
+    .modal-close:hover { color: var(--bg); background: var(--accent); }
+
+    .modal-eyebrow {
+      font-family: var(--sans); font-size: 11px; font-weight: 600;
+      letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .modal h2 {
+      font-family: var(--serif); font-weight: 700;
+      font-size: 28px; line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+    .modal h2 em { font-style: italic; color: var(--accent); }
+    .modal .subtitle {
+      font-family: var(--serif); font-style: italic;
+      font-size: 15px; color: var(--ink-2);
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .modal section { margin-bottom: 18px; }
+    .modal h3 {
+      font-family: var(--sans); font-size: 11px; font-weight: 600;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .modal p, .modal li {
+      font-family: var(--serif); font-size: 15px; line-height: 1.65;
+      color: var(--ink);
+    }
+    .modal ol { padding-left: 22px; margin-top: 4px; }
+    .modal ol li { margin-bottom: 6px; }
+    .modal ol li::marker {
+      font-family: var(--mono); font-size: 12px; color: var(--accent);
+    }
+    .modal code {
+      font-family: var(--mono); font-size: 13px;
+      background: var(--accent-2); color: var(--ink);
+      padding: 1px 6px; border-radius: 2px;
+    }
+
+    .modal-start {
+      margin-top: 10px;
+      width: 100%;
+      font-family: var(--sans); font-size: 13px; font-weight: 600;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--bg); background: var(--ink);
+      padding: 12px 20px;
+      border-radius: 2px;
+      transition: background .15s, transform .15s;
+    }
+    .modal-start:hover { background: var(--accent); }
+    .modal-start:active { transform: translateY(1px); }
+
+    .modal-foot {
+      margin-top: 14px;
+      font-family: var(--sans); font-size: 11px;
+      color: var(--ink-2);
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; flex-wrap: wrap;
+    }
+    .modal-foot label {
+      display: flex; align-items: center; gap: 6px;
+      cursor: pointer; user-select: none;
+    }
+    .modal-foot input[type="checkbox"] {
+      width: 14px; height: 14px; accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .modal-foot .help-link {
+      color: var(--accent);
+      border-bottom: 1px dotted var(--accent);
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-  <!-- content injected by CSS + JS below -->
+  <div class="wrap">
+
+    <!-- masthead -->
+    <header class="masthead">
+      <div class="masthead-left">
+        <div class="logo">Paper<em>·</em>Explorer</div>
+        <div class="tagline" data-zh="追查一篇论文的来路与去向" data-en="Where a paper comes from · where it goes">追查一篇论文的来路与去向</div>
+      </div>
+      <div class="toolbar">
+        <button id="helpBtn" title="About / Help"
+          data-zh="说明" data-en="Help">说明</button>
+        <span class="sep">·</span>
+        <button id="langBtn" title="Switch language">中 / EN</button>
+        <span class="sep">·</span>
+        <button id="themeBtn" title="Toggle theme">Day / Night</button>
+      </div>
+    </header>
+
+    <!-- issue line -->
+    <div class="issue-line">
+      <span data-zh="Vol. I — 独立印行" data-en="Vol. I — Independently printed">Vol. I — 独立印行</span>
+      <span data-zh="编辑 · 乐乐观" data-en="Editor · 乐乐观">编辑 · 乐乐观</span>
+      <span id="dateline"></span>
+    </div>
+
+    <!-- search -->
+    <form class="search" id="searchForm" autocomplete="off">
+      <span class="search-prefix">Query</span>
+      <input id="q" type="text" autofocus
+        data-zh-placeholder="arXiv ID / DOI / URL / 标题"
+        data-en-placeholder="arXiv ID / DOI / URL / title"
+        placeholder="arXiv ID / DOI / URL / 标题" />
+      <button id="searchBtn" type="submit"
+        data-zh="检索" data-en="Search">检索</button>
+    </form>
+
+    <!-- hint -->
+    <div class="hint">
+      <span class="label" data-zh="试试 →" data-en="Try →">试试 →</span>
+      <span class="example" onclick="fillAndSearch('2510.18936')">2510.18936</span>
+      <span class="example" onclick="fillAndSearch('10.1145/3726302.3730046')">10.1145/3726302.3730046</span>
+      <span class="example" onclick="fillAndSearch('Attention is all you need')">Attention is all you need</span>
+    </div>
+
+    <!-- api key -->
+    <div class="apikey">
+      <label data-zh="S2 API Key" data-en="S2 API Key">S2 API Key</label>
+      <input id="apikey" type="password"
+        data-zh-placeholder="可选 · 仅存本机"
+        data-en-placeholder="optional · local only"
+        placeholder="可选 · 仅存本机" />
+      <button id="saveKey" type="button"
+        data-zh="存" data-en="Save">存</button>
+      <a href="https://www.semanticscholar.org/product/api#api-key-form"
+        target="_blank" rel="noopener"
+        data-zh="申请" data-en="Apply">申请</a>
+    </div>
+
+    <!-- status -->
+    <div id="status" class="status" style="display:none"></div>
+
+    <!-- paper summary -->
+    <div id="summary"></div>
+
+    <!-- two columns -->
+    <div id="grid" class="cols" style="display:none">
+      <section class="col">
+        <h3>
+          <span data-zh="引用的文献" data-en="References">引用的文献</span>
+          <span class="count" id="refCount"></span>
+        </h3>
+        <input class="col-filter" id="refFilter"
+          data-zh-placeholder="过滤 · 标题或作者"
+          data-en-placeholder="filter by title or author"
+          placeholder="过滤 · 标题或作者" />
+        <div class="entries" id="refList"></div>
+      </section>
+      <section class="col">
+        <h3>
+          <span data-zh="引用本文的文献" data-en="Citations">引用本文的文献</span>
+          <span class="count" id="citCount"></span>
+        </h3>
+        <input class="col-filter" id="citFilter"
+          data-zh-placeholder="过滤 · 标题或作者"
+          data-en-placeholder="filter by title or author"
+          placeholder="过滤 · 标题或作者" />
+        <div class="entries" id="citList"></div>
+      </section>
+    </div>
+
+    <!-- colophon -->
+    <footer class="colophon">
+      <span data-zh="资料来源" data-en="Data from">资料来源</span>
+      <a href="https://api.semanticscholar.org" target="_blank" rel="noopener">Semantic Scholar</a>
+      &nbsp;·&nbsp;
+      <span data-zh="零后端 · 静态托管" data-en="Zero-backend · static hosting">零后端 · 静态托管</span>
+      <br>
+      <span data-zh="排版 & 代码 ·" data-en="Typography & code ·">排版 & 代码 ·</span>
+      <em>乐乐观</em>
+    </footer>
+
+  </div>
+
+  <!-- ─────────── intro modal ─────────── -->
+  <div class="modal-backdrop" id="introModal">
+    <div class="modal" role="dialog" aria-labelledby="introTitle">
+      <button class="modal-close" id="introClose" aria-label="Close">×</button>
+
+      <div class="modal-eyebrow"
+        data-zh="欢迎 · Welcome"
+        data-en="Welcome · 欢迎">欢迎 · Welcome</div>
+      <h2 id="introTitle">Paper<em>·</em>Explorer</h2>
+      <p class="subtitle"
+        data-zh="一个小工具：粘贴一篇论文，立刻看到它引用了谁、又被谁引用。"
+        data-en="A small tool: paste one paper, instantly see who it cites and who cites it.">
+        一个小工具：粘贴一篇论文，立刻看到它引用了谁、又被谁引用。
+      </p>
+
+      <section>
+        <h3 data-zh="它解决什么" data-en="What it does">它解决什么</h3>
+        <p data-zh="写论文、读论文时，总要沿着引文网络上下追溯。这里把 Semantic Scholar 的数据整理成两栏：一栏是你这篇论文引用的文献（References），另一栏是后来引用它的工作（Citations）。每条都直接附上 arXiv、PDF、DOI、Google Scholar 的跳转。"
+          data-en="When writing or reading papers, you constantly walk up and down the citation graph. This page lays out Semantic Scholar's data in two columns — what the paper cites, and who has cited it — each entry linked to arXiv, PDF, DOI, and Google Scholar.">
+          写论文、读论文时，总要沿着引文网络上下追溯。这里把 Semantic Scholar 的数据整理成两栏：一栏是你这篇论文引用的文献（References），另一栏是后来引用它的工作（Citations）。每条都直接附上 arXiv、PDF、DOI、Google Scholar 的跳转。
+        </p>
+      </section>
+
+      <section>
+        <h3 data-zh="怎么用" data-en="How to use">怎么用</h3>
+        <ol>
+          <li data-zh="在搜索框粘贴下面任意一种内容："
+              data-en="Paste any of these into the search box:">在搜索框粘贴下面任意一种内容：</li>
+        </ol>
+        <p style="margin-left: 22px; margin-top: 4px;">
+          <code>2510.18936</code> &nbsp;·&nbsp;
+          <code>arxiv.org/abs/2510.18936</code> &nbsp;·&nbsp;
+          <code>10.1145/3726302.3730046</code> &nbsp;·&nbsp;
+          <span data-zh="或者直接输入论文标题。" data-en="or just the paper title.">或者直接输入论文标题。</span>
+        </p>
+      </section>
+
+      <section>
+        <h3 data-zh="小提示" data-en="Tips">小提示</h3>
+        <p data-zh="Semantic Scholar 匿名接口大约 1 次 / 秒。频繁查询被限流时，在顶部填入自己的 API Key（仅存你本地浏览器）。"
+          data-en="The anonymous Semantic Scholar API allows about 1 req/sec. If you get rate-limited, paste your API key at the top — it's stored only in your browser.">
+          Semantic Scholar 匿名接口大约 1 次 / 秒。频繁查询被限流时，在顶部填入自己的 API Key（仅存你本地浏览器）。
+        </p>
+      </section>
+
+      <button class="modal-start" id="introStart"
+        data-zh="开始检索 →"
+        data-en="Start searching →">开始检索 →</button>
+
+      <div class="modal-foot">
+        <label>
+          <input type="checkbox" id="introDontShow" checked />
+          <span data-zh="不再显示" data-en="Don't show again">不再显示</span>
+        </label>
+        <span>
+          <span data-zh="作者 ·" data-en="By ·">作者 ·</span>
+          <em style="font-family: var(--serif); font-style: italic;">乐乐观</em>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
 </body>
 </html>
