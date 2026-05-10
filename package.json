@@ -1,0 +1,11 @@
+{
+  "name": "paper-explorer-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero-backend static web app to explore a paper's references and citations via Semantic Scholar.",
+  "scripts": {
+    "dev": "python3 -m http.server 8080",
+    "test": "node _test_api.mjs && node _test_serverless.mjs"
+  }
+}
