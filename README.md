@@ -1,7 +1,13 @@
 # Paper Explorer
 
-零后端、零构建。把整个 `paper_explorer_web/` 目录扔到 Vercel / Cloudflare
-Pages / Netlify / GitHub Pages 都能跑。
+> 粘贴一篇论文，看它引用了谁、又被谁引用。
+> 每条直达 arXiv / PDF / DOI / Google Scholar。纯前端 · 零后端 · 报刊排版。
+
+![Paper Explorer · 首屏](./images/1.png)
+
+![Paper Explorer · 检索结果](./images/2.png)
+
+---
 
 ## 目录结构
 
@@ -12,6 +18,7 @@ paper_explorer_web/
 ├── api/
 │   └── arxiv.js     # 可选：Vercel/Netlify serverless，用来代理 arXiv Atom API
 ├── vercel.json      # Vercel 配置
+├── images/          # README 截图
 └── README.md
 ```
 
